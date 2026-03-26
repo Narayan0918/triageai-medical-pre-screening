@@ -1,0 +1,2 @@
+# triageai-multimodal-medical-pre-screening-routing
+TriageAI bridges the gap between a patient's initial concern and professional medical care. By allowing users to upload images of their visible symptoms (like wounds or rashes) along with text descriptions, our multimodal AI acts as an intelligent first-pass triage assistant. Instead of acting as a standalone diagnostic tool, it provides patients w
