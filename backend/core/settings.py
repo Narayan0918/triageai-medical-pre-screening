@@ -10,22 +10,30 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = os.environ.get('SECRET_KEY', 'unsafe-default-key')
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+
+# Add your production domain here later
+ALLOWED_HOSTS = ['*']
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m*&z3iexxjz9w8dly2dp^xj357axxwx&@g=qhie60$a%up4@g^'
+# SECRET_KEY = 'django-insecure-m*&z3iexxjz9w8dly2dp^xj357axxwx&@g=qhie60$a%up4@g^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -37,6 +45,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'triage',
 ]
 
 MIDDLEWARE = [
@@ -72,12 +82,52 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# DATABASES CONFIGURATION
+# ------------------------------------------------------------------------------
+import ssl # Add this import at the top of the file if it's not there, though Django usually handles it internally
+
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')
+
+if ENVIRONMENT == 'production':
+    # TiDB / Production MySQL Configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.environ.get('TIDB_DB_NAME'),
+            'USER': os.environ.get('TIDB_DB_USER'),
+            'PASSWORD': os.environ.get('TIDB_DB_PASSWORD'),
+            'HOST': os.environ.get('TIDB_DB_HOST'),
+            'PORT': os.environ.get('TIDB_DB_PORT'),
+            'OPTIONS': {
+                # This forces TiDB to accept the connection over TLS
+                'ssl': {'ssl_mode': 'VERIFY_IDENTITY', 'ca': ''}, 
+            },
+        }
     }
-}
+elif os.environ.get('LOCAL_DB_NAME'):
+    # Local MySQL Configuration
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.environ.get('LOCAL_DB_NAME'),
+            'USER': os.environ.get('LOCAL_DB_USER'),
+            'PASSWORD': os.environ.get('LOCAL_DB_PASSWORD'),
+            'HOST': os.environ.get('LOCAL_DB_HOST'),
+            'PORT': os.environ.get('LOCAL_DB_PORT'),
+            'OPTIONS': {
+                # Added here as well, just in case you put TiDB creds in the LOCAL_DB variables!
+                'ssl': {'ssl_mode': 'VERIFY_IDENTITY', 'ca': ''}, 
+            },
+        }
+    }
+else:
+    # Fallback to standard SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -115,3 +165,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+MEDIA_ROOT = '/media/'
+MEDIA_URL = os.path.join(BASE_DIR,'media/')
