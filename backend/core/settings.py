@@ -22,7 +22,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'unsafe-default-key')
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DEBUG', 'True') == 'False'
 
 # Add your production domain here later
 ALLOWED_HOSTS = ['*']
@@ -62,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -188,11 +189,15 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",    # Vite's default local port
-    "http://127.0.0.1:5173",    # Alternative localhost representation
-    # "https://your-future-production-domain.com", <-- Add your live URL here later
-]
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:5173",    # Vite's default local port
+#     "http://127.0.0.1:5173",    # Alternative localhost representation
+#     # "https://your-future-production-domain.com", <-- Add your live URL here later
+# ]
+
+
+CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "authorization",
 ]
