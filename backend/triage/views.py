@@ -1,6 +1,3 @@
-from django.shortcuts import render
-
-# Create your views here.
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -10,35 +7,36 @@ from .models import Doctor
 from .serializers import DoctorSerializer
 
 class AnalyzeSymptomAPIView(APIView):
-    # This tells Django to accept file uploads (multipart/form-data)
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
+        # image_file will be None if the frontend didn't upload anything
         image_file = request.FILES.get('image')
         symptoms_text = request.data.get('symptoms', '')
 
-        # Basic validation
-        if not image_file or not symptoms_text:
+        # Basic validation: Now only require text
+        if not symptoms_text.strip():
             return Response(
-                {'error': 'Both an image and a symptom description are required.'}, 
+                {'error': 'A description of your symptoms is required.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # 1. Read image data
-            image_bytes = image_file.read()
-            mime_type = image_file.content_type
+            # 1. Handle image data dynamically
+            image_bytes = None
+            mime_type = None
+            if image_file:
+                image_bytes = image_file.read()
+                mime_type = image_file.content_type
 
-            # 2. Get the structured JSON from Gemini
+            # 2. call ai service (image data can be None)
             ai_result = analyze_symptoms(image_bytes, mime_type, symptoms_text)
 
-            # 3. Find matching doctors in the database
+            # 3. rest fine (query doctors etc)
             specialty = ai_result.get('suggested_specialty', '')
-            # Filter doctors by specialty (case-insensitive) and limit to 5 results
             doctors = Doctor.objects.filter(specialty__icontains=specialty)[:5]
             serialized_doctors = DoctorSerializer(doctors, many=True).data
 
-            # 4. Package it all up for React
             final_response = {
                 "ai_analysis": ai_result,
                 "recommended_doctors": serialized_doctors

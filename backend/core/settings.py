@@ -23,6 +23,11 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # Add your production domain here later
 ALLOWED_HOSTS = ['*']
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",    # Vite's default local port
+    "http://127.0.0.1:5173",    # Alternative localhost representation
+    # "https://your-future-production-domain.com", <-- Add your live URL here later
+]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -45,12 +50,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'triage',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',      # <-- Add this right here!
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
