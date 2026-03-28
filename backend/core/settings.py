@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import timedelta
+from corsheaders.defaults import default_headers
+
 
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,11 +26,6 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 # Add your production domain here later
 ALLOWED_HOSTS = ['*']
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",    # Vite's default local port
-    "http://127.0.0.1:5173",    # Alternative localhost representation
-    # "https://your-future-production-domain.com", <-- Add your live URL here later
-]
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -56,8 +54,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',      # <-- Add this right here!
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -174,3 +172,28 @@ USE_TZ = True
 STATIC_URL = 'static/'
 MEDIA_ROOT = '/media/'
 MEDIA_URL = os.path.join(BASE_DIR,'media/')
+
+
+# Add to REST_FRAMEWORK settings
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+# SimpleJWT Settings
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",    # Vite's default local port
+    "http://127.0.0.1:5173",    # Alternative localhost representation
+    # "https://your-future-production-domain.com", <-- Add your live URL here later
+]
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+]
+CORS_EXPOSE_HEADERS = ["Content-Type", "X-CSRFToken"]
