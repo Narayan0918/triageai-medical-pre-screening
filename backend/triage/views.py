@@ -3,9 +3,9 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status
 from ai_service import analyze_symptoms
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly,IsAuthenticated
 from .models import Doctor,TriageHistory
-from .serializers import DoctorSerializer
+from .serializers import DoctorSerializer,TriageHistorySerializer
 
 
 
@@ -38,7 +38,7 @@ class RegisterUserAPIView(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-            
+
 class AnalyzeSymptomAPIView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
@@ -87,3 +87,13 @@ class AnalyzeSymptomAPIView(APIView):
 
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class TriageHistoryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Fetch history for this specific user, newest first
+        history = TriageHistory.objects.filter(user=request.user).order_by('-created_at')
+        serializer = TriageHistorySerializer(history, many=True)
+        return Response(serializer.data)

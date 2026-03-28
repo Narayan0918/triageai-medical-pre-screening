@@ -7,17 +7,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   AlertCircle, ArrowRight, Upload, X, Stethoscope, ShieldAlert, 
   CheckCircle2, Clock, Hospital, User, RefreshCw, ChevronRight,
-  LogIn, LogOut, History, UserPlus, Mail, Lock
+  LogIn, LogOut, History, Mail, Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { analyzeSymptoms } from './services/api';
+import { analyzeSymptoms, fetchHistory } from './services/api';
 import { login, register, logout } from './services/auth';
 
 export default function App() {
   // --- AUTH & UI STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false); // Toggle for Reg vs Login
+  const [isRegistering, setIsRegistering] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   
   // --- FORM DATA STATE ---
@@ -26,34 +26,54 @@ export default function App() {
   const [imageFile, setImageFile] = useState(null); 
   const [imagePreview, setImagePreview] = useState(null); 
   
-  // --- STATUS STATE ---
+  // --- STATUS & DATA STATE ---
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [authError, setAuthError] = useState(null);
   const [result, setResult] = useState(null);
+  const [historyData, setHistoryData] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   
   const fileInputRef = useRef(null);
+
+  // --- FETCH HISTORY LOGIC ---
+  useEffect(() => {
+    if (showHistory && isLoggedIn) {
+      const loadHistory = async () => {
+        setLoadingHistory(true);
+        try {
+          const data = await fetchHistory();
+          setHistoryData(data);
+        } catch (err) {
+          console.error("Failed to fetch history:", err);
+        } finally {
+          setLoadingHistory(false);
+        }
+      };
+      loadHistory();
+    }
+  }, [showHistory, isLoggedIn]);
 
   // --- AUTH ACTIONS ---
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError(null);
     try {
-        if (isRegistering) {
-            await register(authData.username, authData.password, authData.email);
-            await login(authData.username, authData.password);
-        } else {
-            await login(authData.username, authData.password);
-        }
-        setIsLoggedIn(true);
-        setShowLoginModal(false);
-        setAuthData({ username: '', password: '', email: '' });
+      if (isRegistering) {
+        await register(authData.username, authData.password, authData.email);
+        await login(authData.username, authData.password);
+      } else {
+        await login(authData.username, authData.password);
+      }
+      setIsLoggedIn(true);
+      setShowLoginModal(false);
+      setIsRegistering(false);
+      setAuthData({ username: '', password: '', email: '' });
     } catch (err) {
-        // This pulls the {'error': '...'} message from our Django view
-        const msg = err.response?.data?.error || "Authentication failed.";
-        setAuthError(msg); 
+      const msg = err.response?.data?.error || "Authentication failed. Try again.";
+      setAuthError(msg);
     }
-};
+  };
 
   const handleLogoutAction = () => {
     logout();
@@ -108,24 +128,41 @@ export default function App() {
     }
   };
 
+  // Format the Django timestamp into a readable date
+  const formatDate = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   return (
     <div className="min-h-screen bg-[#F9F9F9] font-sans text-slate-900">
-      {/* Emergency Disclaimer */}
       <div className="bg-red-950 text-white py-2 px-4 text-center text-[11px] font-bold uppercase tracking-widest border-b border-red-900 sticky top-0 z-50">
         Not for emergencies. Call 911 for life-threatening conditions
       </div>
 
       {/* Navbar */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-[33px] z-40">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-8.25 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          {/* Logo click explicitly resets everything */}
           <div className="text-2xl font-black tracking-tighter text-slate-900 cursor-pointer" onClick={handleReset}>
             TriageAI
           </div>
           
           <nav className="hidden md:flex items-center gap-8">
-            <button onClick={handleReset} className={`text-sm font-bold pb-1 transition-all ${!showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}>Symptom Checker</button>
+            {/* FIX: Clicking Symptom Checker now just hides history, preserving state */}
+            <button 
+                onClick={() => setShowHistory(false)} 
+                className={`text-sm font-bold pb-1 transition-all ${!showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}
+            >
+                Symptom Checker
+            </button>
             {isLoggedIn && (
-              <button onClick={() => setShowHistory(true)} className={`text-sm font-bold pb-1 transition-all ${showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}>My History</button>
+              <button 
+                onClick={() => setShowHistory(true)} 
+                className={`text-sm font-bold pb-1 transition-all ${showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}
+              >
+                My History
+              </button>
             )}
           </nav>
 
@@ -146,143 +183,44 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-12">
         <AnimatePresence mode="wait">
           
-          {/* --- AUTH MODAL (Login & Registration) --- */}
-          {showLoginModal && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 relative">
-                <button onClick={() => setShowLoginModal(false)} className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
-                
-                <div className="mb-8">
-                  <h2 className="text-3xl font-black tracking-tight text-slate-900">
-                    {isRegistering ? 'Create Account' : 'Welcome Back'}
-                  </h2>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                    {isRegistering ? 'Start your clinical journey' : 'Access your secure medical history'}
-                  </p>
-                </div>
-
-                <form onSubmit={handleAuthSubmit} className="space-y-4">
-                  {isRegistering && (
-                    <div className="relative">
-                      <Mail className="absolute left-4 top-4 text-slate-300" size={18} />
-                      <input 
-                        type="email" 
-                        placeholder="Email Address" 
-                        required 
-                        value={authData.email}
-                        onChange={(e) => setAuthData({...authData, email: e.target.value})}
-                        className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
-                      />
-                    </div>
-                  )}
-                  <div className="relative">
-                    <User className="absolute left-4 top-4 text-slate-300" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Username" 
-                      required 
-                      value={authData.username}
-                      onChange={(e) => setAuthData({...authData, username: e.target.value})}
-                      className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
-                    />
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-4 text-slate-300" size={18} />
-                    <input 
-                      type="password" 
-                      placeholder="Password" 
-                      required 
-                      value={authData.password}
-                      onChange={(e) => setAuthData({...authData, password: e.target.value})}
-                      className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
-                    />
-                  </div>
-
-                  {authError && (
-                    <div className="flex items-center gap-2 text-red-600 text-xs font-bold bg-red-50 p-3 rounded-xl">
-                      <AlertCircle size={14} /> {authError}
-                    </div>
-                  )}
-
-                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200">
-                    {isRegistering ? 'Create Profile' : 'Sign In'} <ArrowRight size={20} />
-                  </button>
-                </form>
-
-                <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-                  <p className="text-sm font-medium text-slate-500">
-                    {isRegistering ? 'Already have an account?' : 'New to TriageAI?'}
-                    <button 
-                      onClick={() => { setIsRegistering(!isRegistering); setAuthError(null); }}
-                      className="ml-2 text-slate-900 font-bold hover:underline"
-                    >
-                      {isRegistering ? 'Sign In' : 'Create Account'}
-                    </button>
-                  </p>
-                </div>
-              </motion.div>
-            </div>
-          )}
-
-          {/* --- VIEW: MAIN CONTENT (History, Intake, or Results) --- */}
+          {/* --- VIEW 1: HISTORY --- */}
           {isLoggedIn && showHistory ? (
             <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
               <h2 className="text-4xl font-black tracking-tighter">Consultation History</h2>
-              <div className="grid gap-4">
-                {/* Map real history data here */}
-                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center py-20 text-slate-400 font-medium">
-                  <History size={48} className="mx-auto mb-4 opacity-20" />
-                  Your past consultations will appear here.
-                </div>
-              </div>
-            </motion.div>
-          ) : !result ? (
-            /* --- INTAKE FORM VIEW --- */
-            <motion.div key="intake" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
-              <div className="lg:col-span-5 space-y-8 pt-8">
-                <div className="space-y-4">
-                  <span className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Clinical Triage v2.5</span>
-                  <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter leading-[0.95] text-slate-900">Precision analysis for your peace of mind.</h1>
-                  <p className="text-lg text-slate-500 leading-relaxed max-w-md">Our AI engine categorizes urgency and suggests next steps. Log in to track your symptoms over time.</p>
-                </div>
-                <div className="p-6 bg-white rounded-2xl border-l-4 border-slate-900 shadow-sm">
-                  <p className="text-sm font-medium italic text-slate-700 leading-relaxed">"The most intuitive tool for understanding my symptoms before heading to the clinic."</p>
-                  <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">— Verified Patient</p>
-                </div>
-              </div>
-
-              <div className="lg:col-span-7 bg-white rounded-3xl p-8 lg:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100">
-                <div className="space-y-10">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Symptom Description</label>
-                    <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} className="w-full min-h-[200px] bg-slate-50 border-none rounded-2xl p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all resize-none" placeholder="Describe how you feel..." />
+              
+              {loadingHistory ? (
+                  <div className="flex justify-center py-20">
+                      <RefreshCw className="animate-spin text-slate-400" size={32} />
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Visual Evidence (Optional)</label>
-                    <div onClick={() => fileInputRef.current?.click()} className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 cursor-pointer overflow-hidden ${imagePreview ? 'border-none' : ''}`}>
-                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-                      {imagePreview ? (
-                        <div className="absolute inset-0 w-full h-full">
-                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                          <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); }} className="absolute top-4 right-4 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg"><X size={16} /></button>
+              ) : historyData.length > 0 ? (
+                  <div className="grid gap-4">
+                    {historyData.map((item) => (
+                      <div key={item.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${getUrgencyColor(item.urgency)}`}>
+                            <History size={20} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-lg">{item.specialty} Assessment</p>
+                            <p className="text-sm text-slate-500 italic line-clamp-1">"{item.symptoms}"</p>
+                          </div>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center py-6 text-center">
-                          <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-4"><Upload size={20} className="text-slate-400" /></div>
-                          <p className="text-sm text-slate-600 font-medium tracking-tight">Drag and drop or <span className="text-slate-900 underline underline-offset-4">browse files</span></p>
+                        <div className="flex items-center gap-6 shrink-0">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{formatDate(item.created_at)}</p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                  {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex gap-2"><AlertCircle size={16} /> {error}</div>}
-                  <button onClick={handleAnalyze} disabled={loading || !symptoms.trim()} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl">
-                    {loading ? <><RefreshCw className="animate-spin" size={20} /> Analyzing...</> : <>{isLoggedIn ? 'Analyze & Save' : 'Analyze Symptoms'} <ArrowRight size={20} /></>}
-                  </button>
-                </div>
-              </div>
+              ) : (
+                  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center py-20 text-slate-400 font-medium">
+                    <History size={48} className="mx-auto mb-4 opacity-20" />
+                    You haven't saved any symptom assessments yet.
+                  </div>
+              )}
             </motion.div>
-          ) : (
-            /* --- RESULTS DASHBOARD VIEW --- */
+          ) : result ? (
+            
+            /* --- VIEW 2: RESULTS DASHBOARD --- */
             <motion.div key="results" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} className="space-y-12">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
@@ -347,6 +285,94 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          ) : (
+            
+            /* --- VIEW 3: INTAKE FORM --- */
+            <motion.div key="intake" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+              <div className="lg:col-span-5 space-y-8 pt-8">
+                <div className="space-y-4">
+                  <span className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Clinical Triage v2.5</span>
+                  <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter leading-[0.95] text-slate-900">Precision analysis for your peace of mind.</h1>
+                </div>
+                <div className="p-6 bg-white rounded-2xl border-l-4 border-slate-900 shadow-sm">
+                  <p className="text-sm font-medium italic text-slate-700 leading-relaxed">"The most intuitive tool for understanding my symptoms."</p>
+                  <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">— Verified Patient</p>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 bg-white rounded-3xl p-8 lg:p-12 shadow-sm border border-slate-100">
+                <div className="space-y-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Symptom Description</label>
+                    <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} className="w-full min-h-50 bg-slate-50 border-none rounded-2xl p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all resize-none" placeholder="Describe how you feel..." />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Visual Evidence (Optional)</label>
+                    <div onClick={() => fileInputRef.current?.click()} className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 cursor-pointer overflow-hidden ${imagePreview ? 'border-none' : ''}`}>
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                      {imagePreview ? (
+                        <div className="absolute inset-0 w-full h-full">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); }} className="absolute top-4 right-4 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg"><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center py-6 text-center">
+                          <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-4"><Upload size={20} className="text-slate-400" /></div>
+                          <p className="text-sm text-slate-600 font-medium tracking-tight">Browse or drag files</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex gap-2"><AlertCircle size={16} /> {error}</div>}
+                  <button onClick={handleAnalyze} disabled={loading || !symptoms.trim()} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl">
+                    {loading ? <><RefreshCw className="animate-spin" size={20} /> Analyzing...</> : <>{isLoggedIn ? 'Analyze & Save' : 'Analyze Symptoms'} <ArrowRight size={20} /></>}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* --- AUTH MODAL (External to Main Animation) --- */}
+        <AnimatePresence>
+          {showLoginModal && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 relative">
+                <button onClick={() => setShowLoginModal(false)} className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                <div className="mb-8">
+                  <h2 className="text-3xl font-black tracking-tight text-slate-900">{isRegistering ? 'Create Account' : 'Welcome Back'}</h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{isRegistering ? 'Start your clinical journey' : 'Secure Clinical Access'}</p>
+                </div>
+                <form onSubmit={handleAuthSubmit} className="space-y-4">
+                  {isRegistering && (
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-4 text-slate-300" size={18} />
+                      <input type="email" placeholder="Email Address" required value={authData.email} onChange={(e) => setAuthData({...authData, email: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" />
+                    </div>
+                  )}
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-slate-300" size={18} />
+                    <input type="text" placeholder="Username" required value={authData.username} onChange={(e) => setAuthData({...authData, username: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" />
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-slate-300" size={18} />
+                    <input type="password" placeholder="Password" required value={authData.password} onChange={(e) => setAuthData({...authData, password: e.target.value})} className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" />
+                  </div>
+                  {authError && <div className="flex items-center gap-2 text-red-600 text-xs font-bold bg-red-50 p-3 rounded-xl"><AlertCircle size={14} /> {authError}</div>}
+                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl">
+                    {isRegistering ? 'Create Profile' : 'Sign In'} <ArrowRight size={20} />
+                  </button>
+                </form>
+                <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                  <p className="text-sm font-medium text-slate-500">
+                    {isRegistering ? 'Already have an account?' : 'New to TriageAI?'}
+                    <button onClick={() => { setIsRegistering(!isRegistering); setAuthError(null); }} className="ml-2 text-slate-900 font-bold hover:underline">
+                      {isRegistering ? 'Sign In' : 'Create Account'}
+                    </button>
+                  </p>
+                </div>
+              </motion.div>
+            </div>
           )}
         </AnimatePresence>
       </main>
@@ -354,7 +380,7 @@ export default function App() {
       <footer className="border-t border-slate-200 py-12 mt-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-2xl font-black tracking-tighter text-slate-900">TriageAI</div>
-          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">© 2026 Clinical Curator Systems. Secure HIPAA Compliant Storage.</p>
+          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">© 2026 TriageAI. Secure HIPAA Compliant Storage.</p>
         </div>
       </footer>
     </div>
