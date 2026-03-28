@@ -1,29 +1,20 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework import status
-from ai_service import analyze_symptoms
-from rest_framework.permissions import IsAuthenticatedOrReadOnly,IsAuthenticated
-from .models import Doctor,TriageHistory
-from .serializers import DoctorSerializer,TriageHistorySerializer
-
-
-
-# backend/triage/views.py
+from rest_framework import status, permissions
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
 from django.contrib.auth.models import User
-from rest_framework import permissions
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
+from .models import Doctor, TriageHistory
+from .serializers import DoctorSerializer, TriageHistorySerializer
+from ai_service import analyze_symptoms
 
-# backend/triage/views.py
 class RegisterUserAPIView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
-        email = request.data.get('email', '') # Default to empty string
+        email = request.data.get('email', '') 
 
         if not username or not password:
             return Response({'error': 'Please provide both username and password.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -32,7 +23,6 @@ class RegisterUserAPIView(APIView):
             return Response({'error': 'This username is already taken.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            # Using create_user handles password hashing automatically
             user = User.objects.create_user(username=username, password=password, email=email)
             return Response({'message': 'User created successfully'}, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -40,33 +30,44 @@ class RegisterUserAPIView(APIView):
 
 
 class AnalyzeSymptomAPIView(APIView):
+    # Allow guests to use it, but only auth users can save history
+    permission_classes = [IsAuthenticatedOrReadOnly] 
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
-        # image_file will be None if the frontend didn't upload anything
         image_file = request.FILES.get('image')
         symptoms_text = request.data.get('symptoms', '')
 
-        # Basic validation: Now only require text
         if not symptoms_text.strip():
             return Response(
                 {'error': 'A description of your symptoms is required.'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            # 1. Handle image data dynamically
-            image_bytes = None
-            mime_type = None
-            if image_file:
+        # STEP 1: Secure Image Parsing
+        image_bytes = None
+        mime_type = None
+        if image_file:
+            try:
                 image_bytes = image_file.read()
                 mime_type = image_file.content_type
+            except Exception as e:
+                print(f"Image Parse Error: {str(e)}")
+                return Response({'error': 'Failed to process the uploaded image.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # 2. call ai service (image data can be None)
+        # STEP 2: Call Gemini AI Service securely
+        try:
             ai_result = analyze_symptoms(image_bytes, mime_type, symptoms_text)
+        except Exception as e:
+            print(f"Gemini Engine Error: {str(e)}") # This will now show up in Render Logs!
+            return Response({'error': f'AI Service failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # 3. rest fine (query doctors etc)
-            specialty = ai_result.get('suggested_specialty', '')
+        # STEP 3: Process the AI Result & Query Doctors
+        try:
+            # Safely get values using .get() to prevent KeyErrors if Gemini alters the schema slightly
+            specialty = ai_result.get('suggested_specialty', 'General Practice')
+            urgency = ai_result.get('urgency_level', 'Yellow')
+
             doctors = Doctor.objects.filter(specialty__icontains=specialty)[:5]
             serialized_doctors = DoctorSerializer(doctors, many=True).data
 
@@ -74,26 +75,30 @@ class AnalyzeSymptomAPIView(APIView):
                 "ai_analysis": ai_result,
                 "recommended_doctors": serialized_doctors
             }
+        except Exception as e:
+            print(f"Data Formatting Error: {str(e)}")
+            return Response({'error': f'Failed to structure response: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            if request.user.is_authenticated:
+        # STEP 4: Save to Database (If logged in)
+        if request.user.is_authenticated:
+            try:
                 TriageHistory.objects.create(
                     user=request.user,
                     symptoms=symptoms_text,
-                    urgency=ai_result['urgency_level'],
-                    specialty=ai_result['suggested_specialty']
+                    urgency=urgency,
+                    specialty=specialty
                 )
+            except Exception as e:
+                # If saving to history fails, we print it to logs but we DON'T crash the whole app.
+                # The user will still get their diagnostic result.
+                print(f"TiDB Database Save Error: {str(e)}")
 
-            return Response(final_response, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # Finally, return the success payload!
+        return Response(final_response, status=status.HTTP_200_OK)
 
 
 class TriageHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Fetch history for this specific user, newest first
-        history = TriageHistory.objects.filter(user=request.user).order_by('-created_at')
-        serializer = TriageHistorySerializer(history, many=True)
-        return Response(serializer.data)
+        # Fetch history for this
