@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://127.0.0.1:8000/api/';
+const BASE_URL = 'https://triage-ai-api-wiu9.onrender.com/api/';
 
 export const login = async (username, password) => {
     const response = await axios.post(`${BASE_URL}token/`, { username, password });
