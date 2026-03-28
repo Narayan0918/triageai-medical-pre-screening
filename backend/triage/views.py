@@ -31,7 +31,7 @@ class RegisterUserAPIView(APIView):
 
 class AnalyzeSymptomAPIView(APIView):
     # Allow guests to use it, but only auth users can save history
-    permission_classes = [IsAuthenticatedOrReadOnly] 
+    permission_classes = [permissions.AllowAny] 
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request, *args, **kwargs):
