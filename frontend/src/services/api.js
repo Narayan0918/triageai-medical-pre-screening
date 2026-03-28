@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://127.0.0.1:8000/api/triage/';
+const BASE_URL = 'https://triage-ai-api-wiu9.onrender.com/api/triage/';
 
 // 1. UPDATED: Now sends the token if the user is logged in
 export const analyzeSymptoms = async (imageFile, symptomsText) => {
