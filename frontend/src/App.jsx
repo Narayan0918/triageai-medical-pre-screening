@@ -108,7 +108,7 @@ export default function App() {
       </div>
 
       {/* Navbar */}
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-[33px] z-40">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-8.25 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="text-2xl font-black tracking-tighter text-slate-900">
             TriageAI
@@ -163,7 +163,7 @@ export default function App() {
                     <textarea 
                       value={symptoms}
                       onChange={(e) => setSymptoms(e.target.value)}
-                      className="w-full min-h-[200px] bg-slate-50 border-none rounded-2xl p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all resize-none"
+                      className="w-full min-h-50 bg-slate-50 border-none rounded-2xl p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all resize-none"
                       placeholder="Example: I've noticed a persistent dry cough for the past 3 days..."
                     />
                   </div>
@@ -287,7 +287,7 @@ export default function App() {
               >
                 {/* Suggested Specialty */}
                 <div className="flex items-start gap-6">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center flex-shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center shrink-0">
                     <Stethoscope className="text-white" size={24} />
                   </div>
                   <div>
