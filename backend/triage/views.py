@@ -90,7 +90,6 @@ class AnalyzeSymptomAPIView(APIView):
                 )
             except Exception as e:
                 # If saving to history fails, we print it to logs but we DON'T crash the whole app.
-                # The user will still get their diagnostic result.
                 print(f"TiDB Database Save Error: {str(e)}")
 
         # Finally, return the success payload!
@@ -101,4 +100,7 @@ class TriageHistoryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Fetch history for this
+        # Fetch history for this specific user, newest first
+        history = TriageHistory.objects.filter(user=request.user).order_by('-created_at')
+        serializer = TriageHistorySerializer(history, many=True)
+        return Response(serializer.data)
