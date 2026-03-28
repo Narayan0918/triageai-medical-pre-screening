@@ -1,121 +1,362 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-function App() {
-  const [count, setCount] = useState(0)
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  AlertCircle, ArrowRight, Upload, X, Stethoscope, ShieldAlert, 
+  CheckCircle2, Clock, Hospital, User, RefreshCw, ChevronRight,
+  LogIn, LogOut, History, UserPlus, Mail, Lock
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { analyzeSymptoms } from './services/api';
+import { login, register, logout } from './services/auth';
+
+export default function App() {
+  // --- AUTH & UI STATE ---
+  const [isLoggedIn, setIsLoggedIn] = useState(!!localStorage.getItem('token'));
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false); // Toggle for Reg vs Login
+  const [showHistory, setShowHistory] = useState(false);
+  
+  // --- FORM DATA STATE ---
+  const [authData, setAuthData] = useState({ username: '', password: '', email: '' });
+  const [symptoms, setSymptoms] = useState('');
+  const [imageFile, setImageFile] = useState(null); 
+  const [imagePreview, setImagePreview] = useState(null); 
+  
+  // --- STATUS STATE ---
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [result, setResult] = useState(null);
+  
+  const fileInputRef = useRef(null);
+
+  // --- AUTH ACTIONS ---
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault();
+    setAuthError(null);
+    try {
+        if (isRegistering) {
+            await register(authData.username, authData.password, authData.email);
+            await login(authData.username, authData.password);
+        } else {
+            await login(authData.username, authData.password);
+        }
+        setIsLoggedIn(true);
+        setShowLoginModal(false);
+        setAuthData({ username: '', password: '', email: '' });
+    } catch (err) {
+        // This pulls the {'error': '...'} message from our Django view
+        const msg = err.response?.data?.error || "Authentication failed.";
+        setAuthError(msg); 
+    }
+};
+
+  const handleLogoutAction = () => {
+    logout();
+    setIsLoggedIn(false);
+    setShowHistory(false);
+    handleReset();
+  };
+
+  // --- CORE TRIAGE ACTIONS ---
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setImagePreview(reader.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAnalyze = async () => {
+    if (!symptoms.trim()) {
+      setError("Please describe your symptoms.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await analyzeSymptoms(imageFile, symptoms);
+      setResult(data);
+    } catch (err) {
+      setError(err.message || "Analysis failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setResult(null);
+    setSymptoms('');
+    setImageFile(null);
+    setImagePreview(null);
+    setError(null);
+    setShowHistory(false);
+  };
+
+  const getUrgencyColor = (level) => {
+    switch (level?.toLowerCase()) {
+      case 'red': return 'bg-red-600 border-red-700 text-white';
+      case 'yellow': return 'bg-amber-500 border-amber-600 text-white';
+      case 'green': return 'bg-emerald-600 border-emerald-700 text-white';
+      default: return 'bg-slate-800 border-slate-900 text-white';
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-[#F9F9F9] font-sans text-slate-900">
+      {/* Emergency Disclaimer */}
+      <div className="bg-red-950 text-white py-2 px-4 text-center text-[11px] font-bold uppercase tracking-widest border-b border-red-900 sticky top-0 z-50">
+        Not for emergencies. Call 911 for life-threatening conditions
+      </div>
 
-      <div className="ticks"></div>
+      {/* Navbar */}
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-[33px] z-40">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="text-2xl font-black tracking-tighter text-slate-900 cursor-pointer" onClick={handleReset}>
+            TriageAI
+          </div>
+          
+          <nav className="hidden md:flex items-center gap-8">
+            <button onClick={handleReset} className={`text-sm font-bold pb-1 transition-all ${!showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}>Symptom Checker</button>
+            {isLoggedIn && (
+              <button onClick={() => setShowHistory(true)} className={`text-sm font-bold pb-1 transition-all ${showHistory ? 'border-b-2 border-slate-900' : 'text-slate-500'}`}>My History</button>
+            )}
+          </nav>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <div className="flex items-center gap-4">
+            {isLoggedIn ? (
+              <button onClick={handleLogoutAction} className="flex items-center gap-2 text-sm font-bold text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl transition-all">
+                <LogOut size={18} /> <span className="hidden sm:inline">Logout</span>
+              </button>
+            ) : (
+              <button onClick={() => { setShowLoginModal(true); setIsRegistering(false); }} className="flex items-center gap-2 text-sm font-bold bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
+                <LogIn size={18} /> Sign In
+              </button>
+            )}
+          </div>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      <main className="max-w-7xl mx-auto px-4 py-12">
+        <AnimatePresence mode="wait">
+          
+          {/* --- AUTH MODAL (Login & Registration) --- */}
+          {showLoginModal && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+              <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-slate-100 relative">
+                <button onClick={() => setShowLoginModal(false)} className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20}/></button>
+                
+                <div className="mb-8">
+                  <h2 className="text-3xl font-black tracking-tight text-slate-900">
+                    {isRegistering ? 'Create Account' : 'Welcome Back'}
+                  </h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+                    {isRegistering ? 'Start your clinical journey' : 'Access your secure medical history'}
+                  </p>
+                </div>
+
+                <form onSubmit={handleAuthSubmit} className="space-y-4">
+                  {isRegistering && (
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-4 text-slate-300" size={18} />
+                      <input 
+                        type="email" 
+                        placeholder="Email Address" 
+                        required 
+                        value={authData.email}
+                        onChange={(e) => setAuthData({...authData, email: e.target.value})}
+                        className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
+                      />
+                    </div>
+                  )}
+                  <div className="relative">
+                    <User className="absolute left-4 top-4 text-slate-300" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Username" 
+                      required 
+                      value={authData.username}
+                      onChange={(e) => setAuthData({...authData, username: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
+                    />
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-4 text-slate-300" size={18} />
+                    <input 
+                      type="password" 
+                      placeholder="Password" 
+                      required 
+                      value={authData.password}
+                      onChange={(e) => setAuthData({...authData, password: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl p-4 pl-12 focus:ring-2 focus:ring-slate-900 font-medium" 
+                    />
+                  </div>
+
+                  {authError && (
+                    <div className="flex items-center gap-2 text-red-600 text-xs font-bold bg-red-50 p-3 rounded-xl">
+                      <AlertCircle size={14} /> {authError}
+                    </div>
+                  )}
+
+                  <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-200">
+                    {isRegistering ? 'Create Profile' : 'Sign In'} <ArrowRight size={20} />
+                  </button>
+                </form>
+
+                <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+                  <p className="text-sm font-medium text-slate-500">
+                    {isRegistering ? 'Already have an account?' : 'New to TriageAI?'}
+                    <button 
+                      onClick={() => { setIsRegistering(!isRegistering); setAuthError(null); }}
+                      className="ml-2 text-slate-900 font-bold hover:underline"
+                    >
+                      {isRegistering ? 'Sign In' : 'Create Account'}
+                    </button>
+                  </p>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {/* --- VIEW: MAIN CONTENT (History, Intake, or Results) --- */}
+          {isLoggedIn && showHistory ? (
+            <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
+              <h2 className="text-4xl font-black tracking-tighter">Consultation History</h2>
+              <div className="grid gap-4">
+                {/* Map real history data here */}
+                <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm text-center py-20 text-slate-400 font-medium">
+                  <History size={48} className="mx-auto mb-4 opacity-20" />
+                  Your past consultations will appear here.
+                </div>
+              </div>
+            </motion.div>
+          ) : !result ? (
+            /* --- INTAKE FORM VIEW --- */
+            <motion.div key="intake" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-start">
+              <div className="lg:col-span-5 space-y-8 pt-8">
+                <div className="space-y-4">
+                  <span className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Clinical Triage v2.5</span>
+                  <h1 className="text-5xl md:text-6xl font-extrabold tracking-tighter leading-[0.95] text-slate-900">Precision analysis for your peace of mind.</h1>
+                  <p className="text-lg text-slate-500 leading-relaxed max-w-md">Our AI engine categorizes urgency and suggests next steps. Log in to track your symptoms over time.</p>
+                </div>
+                <div className="p-6 bg-white rounded-2xl border-l-4 border-slate-900 shadow-sm">
+                  <p className="text-sm font-medium italic text-slate-700 leading-relaxed">"The most intuitive tool for understanding my symptoms before heading to the clinic."</p>
+                  <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">— Verified Patient</p>
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 bg-white rounded-3xl p-8 lg:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100">
+                <div className="space-y-10">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Symptom Description</label>
+                    <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} className="w-full min-h-[200px] bg-slate-50 border-none rounded-2xl p-6 text-lg text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900 transition-all resize-none" placeholder="Describe how you feel..." />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Visual Evidence (Optional)</label>
+                    <div onClick={() => fileInputRef.current?.click()} className={`relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50 hover:bg-slate-100 cursor-pointer overflow-hidden ${imagePreview ? 'border-none' : ''}`}>
+                      <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                      {imagePreview ? (
+                        <div className="absolute inset-0 w-full h-full">
+                          <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                          <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setImagePreview(null); }} className="absolute top-4 right-4 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg"><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center py-6 text-center">
+                          <div className="w-12 h-12 rounded-full bg-white shadow-sm flex items-center justify-center mb-4"><Upload size={20} className="text-slate-400" /></div>
+                          <p className="text-sm text-slate-600 font-medium tracking-tight">Drag and drop or <span className="text-slate-900 underline underline-offset-4">browse files</span></p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 flex gap-2"><AlertCircle size={16} /> {error}</div>}
+                  <button onClick={handleAnalyze} disabled={loading || !symptoms.trim()} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all shadow-xl">
+                    {loading ? <><RefreshCw className="animate-spin" size={20} /> Analyzing...</> : <>{isLoggedIn ? 'Analyze & Save' : 'Analyze Symptoms'} <ArrowRight size={20} /></>}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            /* --- RESULTS DASHBOARD VIEW --- */
+            <motion.div key="results" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} className="space-y-12">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                  <button onClick={handleReset} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 font-bold text-[10px] uppercase tracking-widest mb-4 transition-colors"><X size={14} /> Start Over</button>
+                  <h2 className="text-4xl font-extrabold tracking-tighter text-slate-900">Diagnostic Narrative</h2>
+                </div>
+                <div className={`flex items-center gap-4 px-6 py-4 rounded-2xl border-b-4 shadow-lg ${getUrgencyColor(result.ai_analysis.urgency_level)}`}>
+                  <AlertCircle size={24} />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Urgency Level</p>
+                    <p className="text-xl font-black tracking-tight">{result.ai_analysis.urgency_level} Priority</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-3xl p-8 lg:p-12 shadow-sm border border-slate-100 space-y-12">
+                <div className="flex items-start gap-6">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center"><Stethoscope className="text-white" size={24} /></div>
+                  <div>
+                    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Suggested Specialty</h3>
+                    <p className="text-3xl font-black tracking-tight text-slate-900">{result.ai_analysis.suggested_specialty}</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Possible Causes</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {result.ai_analysis.possible_causes.map((cause, i) => (
+                      <div key={i} className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="w-2 h-2 rounded-full bg-slate-400" />
+                        <span className="font-bold text-slate-700">{cause}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Recommended Doctors</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {result.recommended_doctors.map((doc) => (
+                    <div key={doc.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg transition-all flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-4 mb-6 border-b border-slate-100 pb-6">
+                          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center border border-slate-200 overflow-hidden shrink-0">
+                            <img src={`https://picsum.photos/seed/doc${doc.id}/200/200`} alt={doc.name} className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-900 text-lg leading-tight">{doc.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded inline-block mt-1">{doc.specialty}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-3 mb-8 text-sm text-slate-500 font-medium">
+                          <div className="flex items-center gap-3"><Hospital size={16} /> {doc.hospital}</div>
+                          <div className="flex items-center gap-3"><Clock size={16} /> {doc.shift_hours}</div>
+                        </div>
+                      </div>
+                      <button className="w-full bg-slate-50 text-slate-900 py-3 rounded-xl font-bold text-sm hover:bg-slate-900 hover:text-white transition-all border border-slate-200 flex items-center justify-center gap-2">
+                        Book Consultation <ChevronRight size={16}/>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
+
+      <footer className="border-t border-slate-200 py-12 mt-12 bg-white">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="text-2xl font-black tracking-tighter text-slate-900">TriageAI</div>
+          <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">© 2026 Clinical Curator Systems. Secure HIPAA Compliant Storage.</p>
+        </div>
+      </footer>
+    </div>
+  );
 }
-
-export default App
