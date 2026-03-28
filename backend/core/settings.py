@@ -106,7 +106,7 @@ if ENVIRONMENT == 'production':
             'PORT': os.environ.get('TIDB_DB_PORT'),
             'OPTIONS': {
                 # This forces TiDB to accept the connection over TLS
-                'ssl': {'ssl_mode': 'VERIFY_IDENTITY', 'ca': ''}, 
+                'ssl': {'ca': '/etc/ssl/certs/ca-certificates.crt'}, 
             },
         }
     }
