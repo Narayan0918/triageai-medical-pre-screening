@@ -137,7 +137,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F9F9F9] font-sans text-slate-900">
       <div className="bg-red-950 text-white py-2 px-4 text-center text-[11px] font-bold uppercase tracking-widest border-b border-red-900 sticky top-0 z-50">
-        Not for emergencies. Call 911 for life-threatening conditions
+        Not for emergencies. Call 108 for life-threatening conditions
       </div>
 
       {/* Navbar */}
