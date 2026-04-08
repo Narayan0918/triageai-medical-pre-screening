@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'https://triage-ai-api-2vlf.onrender.com/api/';
+const BASE_URL = 'https://triageai-medical-pre-screening.onrender.com/api/';
 
 export const login = async (username, password) => {
     const response = await axios.post(`${BASE_URL}token/`, { username, password });
