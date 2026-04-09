@@ -63,12 +63,25 @@ class AnalyzeSymptomAPIView(APIView):
             return Response({'error': f'AI Service failed: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # STEP 3: Process the AI Result & Query Doctors
+        # STEP 3: Process the AI Result & Query Doctors
         try:
-            # Safely get values using .get() to prevent KeyErrors if Gemini alters the schema slightly
+            # Safely get values using .get()
             specialty = ai_result.get('suggested_specialty', 'General Practice')
             urgency = ai_result.get('urgency_level', 'Yellow')
 
-            doctors = Doctor.objects.filter(specialty__icontains=specialty)[:5]
+            # 1. Try to find doctors that match the AI's specific specialty
+            doctors = Doctor.objects.filter(specialty__icontains=specialty)[:3]
+
+            # 2. SMART FALLBACK: If the AI suggests a specialty not in your DB, 
+            # fall back to "General Practice" or grab any available doctor.
+            if not doctors.exists():
+                print(f"No exact match for '{specialty}', triggering fallback.")
+                doctors = Doctor.objects.filter(specialty__icontains='General')[:3]
+                
+                # 3. Absolute safety net (if even 'General' fails)
+                if not doctors.exists():
+                    doctors = Doctor.objects.all()[:3]
+
             serialized_doctors = DoctorSerializer(doctors, many=True).data
 
             final_response = {
@@ -78,7 +91,6 @@ class AnalyzeSymptomAPIView(APIView):
         except Exception as e:
             print(f"Data Formatting Error: {str(e)}")
             return Response({'error': f'Failed to structure response: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
         # STEP 4: Save to Database (If logged in)
         if request.user.is_authenticated:
             try:
