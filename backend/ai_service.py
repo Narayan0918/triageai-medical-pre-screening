@@ -43,6 +43,9 @@ def analyze_symptoms(image_bytes: bytes | None, mime_type: str | None, text_desc
                     CRITICAL RULE: You MUST translate all medical jargon into simple, plain English. 
                     For example: say "Heart Attack" instead of "Myocardial Infarction", or "Collapsed Lung" instead of "Pneumothorax".
                     You DO NOT diagnose. You assess urgency, suggest specialties, and provide safe precautions. Prioritize user safety and total clarity.
+                    When suggesting the medical specialty, you MUST choose from this exact list of strings. 
+                    Do not deviate, do not use synonyms, and do not add the word 'Doctor'.
+                    The allowed specialties are: ['Emergency Medicine', 'General Practice', 'Cardiology', 'Orthopedics', 'Neurology'].
                 """,
                 response_mime_type="application/json",
                 response_schema=TriageResult,
